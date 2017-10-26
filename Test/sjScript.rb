@@ -1,116 +1,164 @@
 
-=begin 在 @interface 与 @end 之间需要写入的内容
- 
- readonly. (忽略 readwrite)的行
- 
- 需要记录的内容:
- readonly 属性的(修饰, 类型, 名称)
- 
-=end
-
-=begin
- 需要记录的内容:
- 属性的(修饰, 类型, 名称)
-=end
-
-
-=begin 在 @implementation 与 @end 之间需要写入的内容
- 
- 1. 生成的 readonly 的属性实例内容
- 2. getter 方法
- 
- 需要获取的内容
- 属性的(修饰, 类型, 名称)
- 
-=end
-
 class Property
-    attr_accessor :xiuShi, :type, :name
+attr_accessor :type, :field
 
-    def initialize(xiuShi:, type:, name:)
-        @xiuShi, @type, @name = xiuShi, type, name
-    end
+def initialize(type:, field:)
+    @type, @field = type, field
+end
+
+def to_s
+    "type: #{type}, field: #{field}"
+end
 end
 
 
 
 class Recorder
-    attr_accessor :interface, :implementation, :parseInterface, :parseImplementation
+attr_accessor :contents,
+              :trimPropertyFields,
+              :parseInterface,
+              :parseImplementation,
+              :parseImpPhaseOneFinished,
+              :parseImpPhaseTwoFinished
+
+def initialize()
     
-    def initialize()
-        @interface = String.new
-        @implementation = String.new
-        
-        @parseInterface = false
-        @parseImplementation = false
+    # 存放所有内容
+    @contents = String.new
+    
+    # 存放变更的字段. (里面是 Property 对象)
+    @trimPropertyFields = Array.new
+    
+    # 记录解析的阶段
+    @parseInterface = false
+    @parseImplementation = false
+    
+    # 第一阶段解析完毕, 开头添加 @syn name = _name
+    @parseImpPhaseOneFinished = false
+    
+    # 第二阶段解析完毕, 底部添加 - (type)filed {}
+    @parseImpPhaseTwoFinished = false
+end
+
+def parsing(line:)
+    # 记录解析阶段
+    if /@interface/ =~ line then
+        self.parseInterface = true
     end
     
-    def parsing(line:)
-        if /@interface/ =~ line then
-            self.parseInterface = true
+    # imp
+    if /@implementation/ =~ line then
+        self.parseImplementation = true
+    end
+    
+    # end
+    if /@end/ =~ line then
+        if self.parseInterface then
+            self.parseInterface = false
         end
         
-        if /@implementation/ =~ line then
-            self.parseImplementation = true
+        if self.parseImplementation then
+            self.parseImplementation = false
         end
-        
-        if /@end/ =~ line then
-            if self.parseInterface then
-                self.parseInterface = false
-            end
+    end
+
+    # 如果正在解析 interface
+    if self.parseInterface then
+        if /\(nonatomic.*[^readonly|readwrite]\)/ =~ line then
+            # 将此行添加 readonly
+            line.gsub!(/\)/, ", readonly)")
             
-            if self.parseImplementation then
-                self.parseImplementation = false
+            # 记录 属性, imp 生成时需要.
+            
+            # 记录 type
+            arr = line.split
+            type = arr[-2] + " *"
+            
+            # 记录 field
+            field = arr.last.gsub!(/\*|;/, "")
+            self.trimPropertyFields.push(Property.new(type:type, field:field))
+        end
+    end
+
+    # 如果正在解析 imp
+    if self.parseImplementation then
+        if !self.parseImpPhaseOneFinished then
+            self.parseImpPhaseOneFinished = true
+            line << "\n"
+            self.trimPropertyFields.each do |property|
+                line << "@synthesize " + property.field + " = _" + property.field + ";\n";
             end
         end
     end
 
-    def parseInterface=(result)
-        @parseInterface = result
-        
-        if result then
-            puts "开始解析 interface"
-        else
-            puts "解析完毕 interface"
+    # 如果解析到了最后 imp
+    if /@end/ =~ line && !self.parseImplementation && self.parseImpPhaseOneFinished then
+        self.parseImpPhaseTwoFinished = true;
+
+        self.trimPropertyFields.each do |property|
+            # - (type *)name {\n
+            # \t  if ( _name ) return _name; \n
+            # \t    \n
+            # \t  return _name; \n
+            # }
+            type = property.type
+            field = property.field
+            self.contents << "\n- (#{type})#{field} {\n\tif ( _#{field} ) return _#{field};\n\t\n\treturn _#{field};\n}\n\n"
         end
+        puts "全部解析完毕"
     end
 
-    def parseImplementation=(result)
-        @parseImplementation = result
-        
-        if result then
-            puts "开始解析 implementation"
-        else
-            puts "解析完毕 implementation"
-        end
+    self.contents += line;
+end
+
+
+def parseInterface=(result)
+    @parseInterface = result
+    
+    if result then
+        puts "开始解析 interface"
+    else
+        puts "解析完毕 interface"
     end
+end
+
+def parseImplementation=(result)
+    @parseImplementation = result
+    
+    if result then
+        puts "开始解析 implementation"
+    else
+        puts "解析完毕 implementation"
+    end
+end
 
 end
 
 
-
-def readFile()
-#    puts "Please Enter Your File Path:"
-#    input = gets
-#
-#    filePath = input.chomp!.gsub!(/\s/, "")
-    filePath = "/Users/bluedancer/Desktop/RubyTest/test.m"
-    file = File.new(filePath, "r")
-end
 
 # -------------------
 
 BEGIN {
-    
+
 }
 
+
+puts "Please Enter Your File Path:"
+input = gets
+
+filePath = input.chomp!.gsub!(/\s/, "")
 recorder = Recorder.new
 
-file = readFile
-file.each_line do |line|
+# generate
+File.new(filePath, "r").each_line do |line|
     recorder.parsing(line: line)
 end
 
+# write
+file = File.new(filePath, "w")
+file.syswrite(recorder.contents)
+file.close
+
 END {
-    
+
 }
