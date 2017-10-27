@@ -157,7 +157,8 @@ input = gets
 
 # chomp 方法只有在行尾是换行符是, 才将其删除
 # chop 方法会删除行尾的任意字符
-filePath = input.chomp!.gsub!(/\s/, "")
+# strip 删除字符串开头和末尾的空白字符
+filePath = input.chomp!.strip!
 recorder = Recorder.new
 
 # generate
