@@ -103,7 +103,16 @@ def parsing(line:)
             # }
             type = property.type
             field = property.field
-            self.contents << "\n- (#{type})#{field} {\n\tif ( _#{field} ) return _#{field};\n\t\n\treturn _#{field};\n}\n\n"
+#            self.contents << "\n- (#{type})#{field} {\n\tif ( _#{field} ) return _#{field};\n\t\n\treturn _#{field};\n}\n\n"
+            self.contents << (<<~"EOB")
+            - (#{type})#{field} {
+                if ( _#{field} ) return _#{field};
+                    
+                return _#{field};
+            }
+            
+            EOB
+            
         end
         puts "全部解析完毕"
     end
@@ -146,6 +155,8 @@ BEGIN {
 puts "Please Enter Your File Path:"
 input = gets
 
+# chomp 方法只有在行尾是换行符是, 才将其删除
+# chop 方法会删除行尾的任意字符
 filePath = input.chomp!.gsub!(/\s/, "")
 recorder = Recorder.new
 
