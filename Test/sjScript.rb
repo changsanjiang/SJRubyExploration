@@ -64,6 +64,7 @@ def parsing(line:)
 
     # 如果正在解析 interface
     if self.parseInterface then
+    # [^readonly|readwrite] 匹配除 readonly|readwrite 以外的字符串
         if /\(nonatomic.*[^readonly|readwrite]\)/ =~ line then
             # 将此行添加 readonly
             line.gsub!(/\)/, ", readonly)")
